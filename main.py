@@ -28,8 +28,14 @@ def home():
         "mensaje": "Servidor de Recomendaciones Cruzimex funcionando correctamente"
     }
 
-@app.get("/recomendar/{codigo_cliente}")
-def obtener_recomendacion_cliente(codigo_cliente: int, top_n: int = 5):
+@app.get("/{codigo_cliente}")
+def obtener_recomendacion_cliente(
+    codigo_cliente: int, 
+    top_n: int = 5, 
+    zona: str = None,          # <--- Nuevo campo de filtro
+    clasificacion: str = None, # <--- Nuevo campo de clasificación/canal
+    vendedor: str = None       # <--- Nuevo campo de vendedor
+    ):
     """
     Este es el 'link' o endpoint que consumirá la app móvil en la calle.
     Recibe el código del cliente y devuelve las recomendaciones basadas en Coseno y Stock Real.
