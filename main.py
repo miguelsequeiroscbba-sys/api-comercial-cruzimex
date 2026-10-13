@@ -32,10 +32,10 @@ def home():
 def obtener_recomendacion_cliente(
     codigo_cliente: int, 
     top_n: int = 5, 
-    zona: str = None,          # <--- Nuevo campo de filtro
-    clasificacion: str = None, # <--- Nuevo campo de clasificación/canal
-    vendedor: str = None       # <--- Nuevo campo de vendedor
-    ):
+    zona: str = None,           # <--- Filtro opcional
+    clasificacion: str = None,  # <--- Filtro opcional
+    vendedor: str = None        # <--- Filtro opcional
+):
     """
     Este es el 'link' o endpoint que consumirá la app móvil en la calle.
     Recibe el código del cliente y devuelve las recomendaciones basadas en Coseno y Stock Real.
@@ -48,6 +48,12 @@ def obtener_recomendacion_cliente(
     info_cli = cli_info.iloc[0]
     canal_cli = info_cli['CLASIFICACION']
     clase_pareto_cli = info_cli.get('CLASE_PARETO', 'C')
+    
+    # Validaciones opcionales de filtros si el usuario los ingresa
+    if zona and str(info_cli.get('ZONA', '')).strip().lower() != str(zona).strip().lower():
+        raise HTTPException(status_code=400, detail=f"El cliente {codigo_cliente} no pertenece a la zona '{zona}'.")
+    if vendedor and str(info_cli.get('VENDEDOR', '')).strip().lower() != str(vendedor).strip().lower():
+        raise HTTPException(status_code=400, detail=f"El cliente {codigo_cliente} no pertenece al vendedor '{vendedor}'.")
 
     # 2. Obtener historial del cliente
     historial = df_ventas[df_ventas['Cliente'] == codigo_cliente]
@@ -91,7 +97,7 @@ def obtener_recomendacion_cliente(
         for subclase_sugerida in top_subclases:
             articulos_subclase = df_ventas[df_ventas['Descripcion SubClase'] == subclase_sugerida][['Articulo', 'Descripcion Articulo']].drop_duplicates()
             for _, row in articulos_subclase.iterrows():
-                cod_art = str(row['Articulo'].strip())
+                cod_art = str(row['Articulo']).strip()
                 if cod_art in articulos_con_stock:
                     match_stock = stock_disponible[stock_disponible['COD'] == cod_art]
                     cant_stock = float(match_stock['CANT'].values[0]) if not match_stock.empty else 0.0
@@ -114,4 +120,28 @@ def obtener_recomendacion_cliente(
         "pareto": clase_pareto_cli,
         "total_recomendaciones": len(recomendaciones),
         "recomendaciones": recomendaciones
+    }
+
+
+# ---- NUEVO ENDPOINT AUXILIAR DE CONSULTA DE CLIENTES ----
+@app.get("/clientes/listar")
+def listar_clientes_disponibles(zona: str = None, clasificacion: str = None, vendedor: str = None):
+    """
+    Permite ver el listado de códigos y nombres de compañía filtrados por zona, clasificación o vendedor.
+    """
+    df = df_clientes.copy()
+    
+    if zona:
+        df = df[df['ZONA'].astype(str).str.contains(zona, case=False, na=False)]
+    if clasificacion:
+        df = df[df['CLASIFICACION'].astype(str).str.contains(clasificacion, case=False, na=False)]
+    if vendedor:
+        df = df[df['VENDEDOR'].astype(str).str.contains(vendedor, case=False, na=False)]
+    
+    columnas_mostrar = [c for c in ['CODIGO', 'NOMBRE COMPANIA', 'CLASIFICACION', 'ZONA', 'VENDEDOR'] if c in df.columns]
+    resultado = df[columnas_mostrar].head(100).to_dict(orient='records')
+    
+    return {
+        "total_encontrados": len(df),
+        "clientes": resultado
     }
